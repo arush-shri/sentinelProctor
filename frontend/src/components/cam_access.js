@@ -1,71 +1,86 @@
-import Webcam from "react-webcam";
-import React, { useCallback, useRef, useState } from "react";
+import ReactPlayer from 'react-player';
+import React, { useCallback, useState } from "react";
 
 function WebCamAccess(){
-    const vidConstraint = {
-        width: 400,
-        height: 400,
-        facingMode: "user"
-    };
 
-    const [capturing, setCapturing] = useState(false);
-    const [img, setImg] = useState(null);
-    const webcamRef = useRef(null);
-    const mediaRecorderRef = useRef(null);
-    const [recordedChunks, setRecordedChunks] = useState([]);
+    const [streamChunks, setStreamChunks] = useState();
+    const [screenStream, setScreenStream] = useState();
 
-    const handleDataAvailable = useCallback(
-        ({ data }) => {
-            console.log("Data available:", data);
-            if (data.size > 0) {
-                setRecordedChunks((prev) => prev.concat(data));
+    const startStream = useCallback( async () => {
+        let All_mediaDevices=navigator.mediaDevices
+        if (!All_mediaDevices || !All_mediaDevices.getUserMedia) {
+           console.log("getUserMedia() not supported.");
+           return;
+        }
+        All_mediaDevices.getUserMedia({
+           audio: true,
+           video: true
+        })
+        .then(function(vidStream) {
+            console.log(vidStream)
+            setStreamChunks(vidStream);
+           
+        })
+        .catch(function(e) {
+           console.log(e.name + ": " + e.message);
+        });
+    }, [setStreamChunks]);
+    
+    const startCapture = useCallback( async () => {
+        let captureStream = null;
+        const displayMediaOptions = {
+            video: {
+              cursor: "always",
+              displaySurface: "monitor",
+            },
+            audio: true,
+        };
+
+        try {
+            captureStream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+            const tracks = captureStream.getVideoTracks();
+            const audioTracks = captureStream.getAudioTracks();
+            if (tracks.length > 0) {
+                const track = tracks[0];
+                const settings = track.getSettings();
+                if (settings.displaySurface === 'monitor' && audioTracks.length > 0) {
+                    setScreenStream(captureStream);
+                } else {
+                    alert("Please select the entire screen with audio.");
+                    startCapture();
+                }
+            } else {
+                console.error('No video tracks found in the stream.');
             }
-        },
-        [setRecordedChunks]
-    );
-
-    const startCapture = useCallback(() => {
-        console.log("Starting capture");
-        setCapturing(true);
-        const imageSrc = webcamRef.current.getScreenshot();
-        setImg(imageSrc);
-
-        mediaRecorderRef.current = new MediaRecorder(webcamRef.current.stream, {
-            mimeType: "video/webm",
-          });
-
-        mediaRecorderRef.current.addEventListener(
-            "dataavailable",
-            handleDataAvailable
-        );
-          
-        mediaRecorderRef.current.start();
-    }, [handleDataAvailable]);
-
-    const stopCapture = useCallback(() => {
-        console.log("Stopping capture");
-        mediaRecorderRef.current.stop();
-        setCapturing(false);
-    }, []);
+        } catch (err) {
+            console.error(`Error: ${err}`);
+        }
+    }, [setScreenStream]);
 
     return (
         <div>
-            <Webcam 
-                audio={true}
-                screenshotFormat="image/jpeg"
-                videoConstraints={vidConstraint}
-                mirrored={false}
-                imageSmoothing={true}
-                height={400}
-                width={400}
-                ref={webcamRef}
-            />
-            {capturing ? (
-                <button onClick={stopCapture}>Stop Capture</button>
-            ) : (
-                <button onClick={startCapture}>Start Capture</button>
-            )}
-            {img && <img src={img} alt="screenshot" />}
+            <button onClick={startStream}>Start Capture</button>
+            <button onClick={startCapture}>Screen Capture</button>
+            {
+                streamChunks && 
+                <ReactPlayer 
+                    width="400px" 
+                    height= "400px"
+                    playing
+                    muted
+                    url={streamChunks}
+                />
+            }
+            {
+                screenStream && 
+                <ReactPlayer 
+                    width="400px" 
+                    height= "400px"
+                    playing
+                    muted
+                    url={screenStream}
+                />
+            }
         </div>
     );
 }
